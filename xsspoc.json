@@ -1,0 +1,23 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "Security Test",
+    "description": "<img src=x onerror=\"alert(document.domain)\">",
+    "version": "1.0"
+  },
+  "host": "localhost",
+  "basePath": "/",
+  "paths": {
+    "/test": {
+      "get": {
+        "summary": "Test",
+        "description": "<script>alert(document.domain)</script>",
+        "responses": {
+          "200": {
+            "description": "<img src=x onerror=\"alert(document.cookie)\">"
+          }
+        }
+      }
+    }
+  }
+}
